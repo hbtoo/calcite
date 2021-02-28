@@ -1137,7 +1137,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
   }
 
   private RelSet merge(RelSet set1, RelSet set2) {
-    assert set1 != set2 : "pre: set != set2";
+    assert set1 != set2 : "pre: set1 != set2";
 
     // Find the root of each set's equivalence tree.
     set1 = equivRoot(set1);
@@ -1201,11 +1201,11 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * (or smaller, or younger). If so, it will be more efficient to merge set1
    * into set2 than set2 into set1. */
   private boolean isSmaller(RelSet set1, RelSet set2) {
-    if (set1.parents.size() < set2.parents.size()) {
-      return true; // set1 is less popular than set2
+    if (set1.parents.size() != set2.parents.size()) {
+      return set1.parents.size() < set2.parents.size(); // true if set1 is less popular than set2
     }
-    if (set1.rels.size() < set2.rels.size()) {
-      return true; // set1 is smaller than set2
+    if (set1.rels.size() != set2.rels.size()) {
+      return set1.rels.size() < set2.rels.size(); // true if set1 is smaller than set2
     }
     return set1.id > set2.id; // true if set1 is younger than set2
   }
