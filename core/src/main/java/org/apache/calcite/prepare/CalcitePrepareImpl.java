@@ -57,6 +57,7 @@ import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.plan.volcano.TvrVolcanoCost;
 import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelCollationTraitDef;
@@ -67,6 +68,10 @@ import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableScan;
+import org.apache.calcite.rel.tvr.TvrVolcanoPlanner;
+import org.apache.calcite.rel.tvr.rules.TvrRuleCollection;
+import org.apache.calcite.rel.tvr.utils.TvrContext;
+import org.apache.calcite.rel.tvr.utils.TvrUtils;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -122,7 +127,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.calcite.util.Static.RESOURCE;
@@ -421,9 +428,44 @@ public class CalcitePrepareImpl implements CalcitePrepare {
       final CalcitePrepare.Context prepareContext,
       org.apache.calcite.plan.Context externalContext,
       RelOptCostFactory costFactory) {
+
+    Properties configProperties = prepareContext.config().getProperties();
+    boolean enableTvr =
+        Boolean.parseBoolean(configProperties.getProperty(TvrUtils.PROGRESSIVE_ENABLE, "false"));
+
+    TvrContext tvrContext = null;
+    if (externalContext != null) {
+      tvrContext = externalContext.unwrap(TvrContext.class);
+    }
+    if (tvrContext != null) {
+      enableTvr = enableTvr || tvrContext.getConfig().getBool(TvrUtils.PROGRESSIVE_ENABLE, false);
+    }
+
+    if (enableTvr) {
+      if (tvrContext == null) {
+        tvrContext = new TvrContext();
+        for (String name : configProperties.stringPropertyNames()) {
+          name = name.toLowerCase(Locale.ROOT);
+          if (name.contains("tvr") || name.contains("progressive")) {
+            tvrContext.getConfig().set(name, configProperties.getProperty(name));
+          }
+        }
+        externalContext = Contexts.chain(externalContext, Contexts.of(tvrContext));
+      }
+      org.apache.calcite.plan.Context context =
+          Contexts.chain(externalContext, Contexts.of(prepareContext.config()));
+
+      TvrVolcanoPlanner planner = new TvrVolcanoPlanner(TvrVolcanoCost.FACTORY, context);
+      planner.addRelTraitDef(ConventionTraitDef.INSTANCE);
+
+      TvrRuleCollection.tvrStandardRuleSet().forEach(planner::addRule);
+      return planner;
+    }
+
     if (externalContext == null) {
       externalContext = Contexts.of(prepareContext.config());
     }
+
     final VolcanoPlanner planner =
         new VolcanoPlanner(costFactory, externalContext);
     planner.addRelTraitDef(ConventionTraitDef.INSTANCE);

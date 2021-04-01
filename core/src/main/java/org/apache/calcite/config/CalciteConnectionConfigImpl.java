@@ -37,6 +37,10 @@ public class CalciteConnectionConfigImpl extends ConnectionConfigImpl
     super(properties);
   }
 
+  public Properties getProperties() {
+    return this.properties;
+  }
+
   /** Returns a copy of this configuration with one property changed.
    *
    * <p>Does not modify this configuration. */

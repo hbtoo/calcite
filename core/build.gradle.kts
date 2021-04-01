@@ -48,6 +48,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
     implementation("com.google.code.findbugs:jsr305"/* optional*/)
+    implementation("com.google.code.gson:gson")
     implementation("com.google.guava:guava")
     implementation("com.jayway.jsonpath:json-path")
     implementation("com.yahoo.datasketches:sketches-core")

@@ -21,8 +21,10 @@ import org.apache.calcite.config.CalciteConnectionConfig;
 import com.google.common.collect.ImmutableList;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Utilities for {@link Context}.
@@ -76,7 +78,8 @@ public class Contexts {
    * object. Thus this method can be used to chain contexts.
    */
   public static Context chain(Context... contexts) {
-    return chain(ImmutableList.copyOf(contexts));
+    return chain(ImmutableList
+        .copyOf(Arrays.stream(contexts).filter(Objects::nonNull).collect(Collectors.toList())));
   }
 
   private static Context chain(Iterable<? extends Context> contexts) {

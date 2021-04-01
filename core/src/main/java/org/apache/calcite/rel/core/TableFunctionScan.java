@@ -71,7 +71,7 @@ public abstract class TableFunctionScan extends AbstractRelNode {
    * @param rowType        Row type produced by function
    * @param columnMappings Column mappings associated with this function
    */
-  protected TableFunctionScan(
+  public TableFunctionScan(
       RelOptCluster cluster,
       RelTraitSet traitSet,
       List<RelNode> inputs,

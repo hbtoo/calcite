@@ -151,6 +151,9 @@ public class AggregateReduceFunctionsRule extends RelOptRule
   private void addDefaultSetOfFunctionsToReduce() {
     functionsToReduce.addAll(SqlKind.AVG_AGG_FUNCTIONS);
     functionsToReduce.addAll(SqlKind.COVAR_AVG_AGG_FUNCTIONS);
+    /**
+     * TODO: comment this?
+     */
     functionsToReduce.add(SqlKind.SUM);
   }
 
@@ -159,6 +162,10 @@ public class AggregateReduceFunctionsRule extends RelOptRule
       return false;
     }
     Aggregate oldAggRel = (Aggregate) call.rels[0];
+    if (oldAggRel.getAggCallList().stream().anyMatch(
+        c -> c.name != null && (c.name.contains("__row_count") || c.name.contains("__tvr")))) {
+      return false;
+    }
     return containsAvgStddevVarCall(oldAggRel.getAggCallList());
   }
 

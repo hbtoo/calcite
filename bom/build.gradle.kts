@@ -55,6 +55,7 @@ dependencies {
         apiv("com.github.kstyrc:embedded-redis")
         apiv("com.github.stephenc.jcip:jcip-annotations")
         apiv("com.google.code.findbugs:jsr305", "findbugs.jsr305")
+        apiv("com.google.code.gson:gson")
         apiv("com.google.guava:guava")
         apiv("com.google.protobuf:protobuf-java", "protobuf")
         apiv("com.h2database:h2")

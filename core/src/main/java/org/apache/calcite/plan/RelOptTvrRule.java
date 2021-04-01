@@ -28,6 +28,7 @@ import org.apache.calcite.plan.volcano.TvrProperty;
 import org.apache.calcite.plan.volcano.TvrPropertyEdgeRuleOperand;
 import org.apache.calcite.plan.volcano.TvrRelOptRuleOperand;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.tools.RelBuilderFactory;
 
 import com.google.common.collect.ImmutableList;
@@ -48,6 +49,14 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 
 public abstract class RelOptTvrRule extends RelOptRule {
+
+  public RelOptTvrRule(RelOptRuleOperand operand) {
+    this(operand, null);
+  }
+
+  public RelOptTvrRule(RelOptRuleOperand operand, String description) {
+    super(operand, RelFactories.LOGICAL_BUILDER, description);
+  }
 
   public RelOptTvrRule(RelOptRuleOperand operand,
       RelBuilderFactory relBuilderFactory, String description) {
