@@ -25,6 +25,10 @@ import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
 import org.apache.calcite.plan.RelTraitSet;
+import org.apache.calcite.plan.tvr.TvrSemantics;
+import org.apache.calcite.plan.volcano.TvrMetaSet;
+import org.apache.calcite.plan.volcano.TvrMetaSetType;
+import org.apache.calcite.plan.volcano.TvrProperty;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.RexExecutorImpl;
 import org.apache.calcite.schema.Schemas;
@@ -36,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * MockRelOptPlanner is a mock implementation of the {@link RelOptPlanner}
@@ -230,13 +235,19 @@ public class MockRelOptPlanner extends AbstractRelOptPlanner {
           planner,
           operand,
           rels,
+          new TvrMetaSet[0],
+          new TvrSemantics[0],
+          new TvrProperty[0],
           Collections.emptyMap());
     }
 
     // implement RelOptRuleCall
-    public void transformTo(RelNode rel, Map<RelNode, RelNode> equiv,
+    public void transformToWithOutRootEquivalence(
+        Map<RelNode, Set<TvrMetaSetType>> newRels, Map<RelNode, RelNode> equiv,
+        Map<RelNode, Map<TvrSemantics, List<TvrMetaSet>>> tvrUpdates,
+        Map<Pair<RelNode, TvrMetaSetType>, Map<TvrProperty, List<TvrMetaSet>>> tvrPropertyInLinks,
         RelHintsPropagator handler) {
-      transformationResult = rel;
+      transformationResult = newRels.keySet().iterator().next();
     }
   }
 }

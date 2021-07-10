@@ -22,5 +22,5 @@ package org.apache.calcite.plan.volcano;
  * {@link org.apache.calcite.rel.RelNode} objects.
  */
 public enum VolcanoPlannerPhase {
-  PRE_PROCESS_MDR, PRE_PROCESS, OPTIMIZE, CLEANUP,
+  OPTIMIZE, COPY, PRE_POST, POST_PROCESS, CLEANUP,
 }

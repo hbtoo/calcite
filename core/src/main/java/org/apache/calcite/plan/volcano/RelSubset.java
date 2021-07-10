@@ -24,6 +24,7 @@ import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelTrait;
 import org.apache.calcite.plan.RelTraitSet;
+import org.apache.calcite.plan.tvr.TvrSemantics;
 import org.apache.calcite.rel.AbstractRelNode;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
@@ -36,6 +37,8 @@ import org.apache.calcite.util.Litmus;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 import org.apache.calcite.util.trace.CalciteTrace;
+
+import com.google.common.collect.SetMultimap;
 
 import org.apiguardian.api.API;
 import org.slf4j.Logger;
@@ -204,6 +207,10 @@ public class RelSubset extends AbstractRelNode {
     return set.rel;
   }
 
+  public SetMultimap<TvrSemantics, TvrMetaSet> getTvrLinks() {
+    return this.set.tvrLinks;
+  }
+
   public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
     if (inputs.isEmpty()) {
       final RelTraitSet traitSet1 = traitSet.simplify();
@@ -230,18 +237,18 @@ public class RelSubset extends AbstractRelNode {
   @Override public void explain(RelWriter pw) {
     // Not a typical implementation of "explain". We don't gather terms &
     // values to be printed later. We actually do the work.
-    pw.item("subset", toString());
     final AbstractRelNode input =
         (AbstractRelNode) Util.first(getBest(), getOriginal());
     if (input == null) {
       return;
     }
+    pw.item("subset", toString());
     input.explainTerms(pw);
     pw.done(input);
   }
 
   @Override protected RelDataType deriveRowType() {
-    return set.rel.getRowType();
+    return set.getRowType();
   }
 
   /**

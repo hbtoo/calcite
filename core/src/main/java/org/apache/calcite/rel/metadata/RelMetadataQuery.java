@@ -17,8 +17,11 @@
 package org.apache.calcite.rel.metadata;
 
 import org.apache.calcite.plan.RelOptCost;
+import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptPredicateList;
 import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.plan.volcano.RelSet;
+import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelDistribution;
 import org.apache.calcite.rel.RelNode;
@@ -33,6 +36,7 @@ import com.google.common.collect.Multimap;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -97,6 +101,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   private BuiltInMetadata.Selectivity.Handler selectivityHandler;
   private BuiltInMetadata.Size.Handler sizeHandler;
   private BuiltInMetadata.UniqueKeys.Handler uniqueKeysHandler;
+
+  private Map<Integer, Double> fakeRowCount;
 
   /**
    * Creates the instance with {@link JaninoRelMetadataProvider} instance
@@ -205,12 +211,35 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   public Double getRowCount(RelNode rel) {
     for (;;) {
       try {
-        Double result = rowCountHandler.getRowCount(rel, this);
+        Double result = getFakeRowCount(rel);
+        result =
+            result == null ? rowCountHandler.getRowCount(rel, this) : result;
         return RelMdUtil.validateResult(result);
       } catch (JaninoRelMetadataProvider.NoHandler e) {
         rowCountHandler = revise(e.relClass, BuiltInMetadata.RowCount.DEF);
+      } catch (CyclicMetadataException e) {
+        return 1e6d;
       }
     }
+  }
+
+
+  private Double getFakeRowCount(RelNode rel) {
+    if (this.fakeRowCount == null) {
+      return null;
+    }
+
+    RelOptPlanner planner = rel.getCluster().getPlanner();
+    if (!(planner instanceof VolcanoPlanner)) {
+      return null;
+    }
+
+    RelSet relSet = ((VolcanoPlanner) planner).getSet(rel);
+    return relSet == null ? null : this.fakeRowCount.get(relSet.getId());
+  }
+
+  public void setFakeRowCount(Map<Integer, Double> fakeRowCount) {
+    this.fakeRowCount = fakeRowCount;
   }
 
   /**
@@ -228,6 +257,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
       } catch (JaninoRelMetadataProvider.NoHandler e) {
         maxRowCountHandler =
             revise(e.relClass, BuiltInMetadata.MaxRowCount.DEF);
+      } catch (CyclicMetadataException e) {
+        return null;
       }
     }
   }
@@ -692,6 +723,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
         return memoryHandler.memory(rel, this);
       } catch (JaninoRelMetadataProvider.NoHandler e) {
         memoryHandler = revise(e.relClass, BuiltInMetadata.Memory.DEF);
+      } catch (CyclicMetadataException e) {
+        return -1d;
       }
     }
   }
@@ -760,6 +793,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
       } catch (JaninoRelMetadataProvider.NoHandler e) {
         distinctRowCountHandler =
             revise(e.relClass, BuiltInMetadata.DistinctRowCount.DEF);
+      } catch (CyclicMetadataException e) {
+        return null;
       }
     }
   }

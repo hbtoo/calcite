@@ -38,6 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.stream.Collectors.joining;
+
 /**
  * Utility class to dump state of <code>VolcanoPlanner</code>.
  */
@@ -118,8 +120,11 @@ class Dumpers {
   static void dumpSets(VolcanoPlanner planner, PrintWriter pw) {
     Ordering<RelSet> ordering = Ordering.from(Comparator.comparingInt(o -> o.id));
     for (RelSet set : ordering.immutableSortedCopy(planner.allSets)) {
-      pw.println("Set#" + set.id
-          + ", type: " + set.subsets.get(0).getRowType());
+      pw.println("Set#" + set.id + ", type: " + set.subsets.get(0).getRowType());
+      pw.println("\t" + set.tvrLinks.asMap().entrySet().stream().
+          map(e -> e.getKey() + "-[" + e.getValue().stream()
+              .map(metaSet -> Integer.toString(metaSet.tvrId)).collect(joining(",")) + "]")
+          .collect(joining(", ")));
       int j = -1;
       for (RelSubset subset : set.subsets) {
         ++j;

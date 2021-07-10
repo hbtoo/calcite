@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.plan.volcano;
 
+import org.apache.calcite.plan.InterTvrRule;
+import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleOperand;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.rules.SubstitutionRule;
@@ -33,7 +35,9 @@ import java.io.StringWriter;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
@@ -50,6 +54,27 @@ class RuleQueue {
 
   private static final Set<String> ALL_RULES = ImmutableSet.of("<ALL RULES>");
 
+  /**
+   * Maps a {@link VolcanoPlannerPhase} to a set of {@link VolcanoPlannerPhase}.
+   * Key is the phase that the optimizer is currently in, and the values are the active phases.
+   * Specially, three phases are activated at one time in OPTIMIZE,
+   * because some empty pruning rules need to be triggered after the COPY is completed
+   * to avoid the sample nodes have been cleaned up in advance.
+   */
+  private static final Map<VolcanoPlannerPhase, EnumSet<VolcanoPlannerPhase>> ACTIVE_PHASE_MAP =
+      new IdentityHashMap<VolcanoPlannerPhase, EnumSet<VolcanoPlannerPhase>>() {{
+        put(VolcanoPlannerPhase.OPTIMIZE, EnumSet
+            .of(VolcanoPlannerPhase.OPTIMIZE, VolcanoPlannerPhase.COPY,
+                VolcanoPlannerPhase.PRE_POST));
+        put(VolcanoPlannerPhase.COPY,
+            EnumSet.of(VolcanoPlannerPhase.COPY, VolcanoPlannerPhase.PRE_POST));
+        put(VolcanoPlannerPhase.PRE_POST,
+            EnumSet.of(VolcanoPlannerPhase.PRE_POST, VolcanoPlannerPhase.POST_PROCESS));
+        put(VolcanoPlannerPhase.POST_PROCESS,
+            EnumSet.of(VolcanoPlannerPhase.POST_PROCESS, VolcanoPlannerPhase.CLEANUP));
+        put(VolcanoPlannerPhase.CLEANUP, EnumSet.of(VolcanoPlannerPhase.CLEANUP));
+      }};
+
   //~ Instance fields --------------------------------------------------------
 
   /**
@@ -64,6 +89,9 @@ class RuleQueue {
       new EnumMap<>(VolcanoPlannerPhase.class);
 
   private final VolcanoPlanner planner;
+
+  private EnumSet<VolcanoPlannerPhase> activePhases;
+  private Set<String> activeRuleSet;
 
   /**
    * Maps a {@link VolcanoPlannerPhase} to a set of rule descriptions. Named rules
@@ -100,6 +128,8 @@ class RuleQueue {
 
       matchListMap.put(phase, matchList);
     }
+
+    activate(0);
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -118,6 +148,30 @@ class RuleQueue {
    */
   public void phaseCompleted(VolcanoPlannerPhase phase) {
     matchListMap.get(phase).clear();
+    int p = phase.ordinal() + 1;
+    if (p == VolcanoPlannerPhase.values().length) {
+      p = 0;
+    }
+    activate(p);
+  }
+
+  private void activate(int phaseOrdinal) {
+    activeRuleSet = null;
+    activePhases = ACTIVE_PHASE_MAP.get(VolcanoPlannerPhase.values()[phaseOrdinal]);
+    activePhases.forEach(phase -> {
+      Set<String> ruleSet = phaseRuleMapping.get(phase);
+      if (ruleSet == ALL_RULES) {
+        activeRuleSet = ALL_RULES;
+      } else if (activeRuleSet == null) {
+        activeRuleSet = new HashSet<>(ruleSet);
+      } else if (activeRuleSet != ALL_RULES) {
+        activeRuleSet.addAll(ruleSet);
+      }
+    });
+  }
+
+  public boolean active(RelOptRule rule) {
+    return activeRuleSet == ALL_RULES || activeRuleSet.contains(rule.toString());
   }
 
   /**
@@ -127,11 +181,12 @@ class RuleQueue {
    */
   void addMatch(VolcanoRuleMatch match) {
     final String matchName = match.toString();
-    for (PhaseMatchList matchList : matchListMap.values()) {
-      Set<String> phaseRuleSet = phaseRuleMapping.get(matchList.phase);
+    for (VolcanoPlannerPhase phase : activePhases) {
+      PhaseMatchList matchList = matchListMap.get(phase);
+
+      Set<String> phaseRuleSet = phaseRuleMapping.get(phase);
       if (phaseRuleSet != ALL_RULES) {
-        String ruleDescription = match.getRule().toString();
-        if (!phaseRuleSet.contains(ruleDescription)) {
+        if (!phaseRuleSet.contains(match.getRule().toString())) {
           continue;
         }
       }
@@ -312,6 +367,12 @@ class RuleQueue {
     private final Queue<VolcanoRuleMatch> preQueue = new LinkedList<>();
 
     /**
+     * Rule match queue for Tvr Queue,
+     * its priority is lower than preQueue and higher than queue
+     */
+    private final Queue<VolcanoRuleMatch> tvrQueue = new LinkedList<>();
+
+    /**
      * Current list of VolcanoRuleMatches for this phase. New rule-matches
      * are appended to the end of this queue.
      * The rules are not sorted in any way.
@@ -335,20 +396,27 @@ class RuleQueue {
     }
 
     int size() {
-      return preQueue.size() + queue.size();
+      return preQueue.size() + tvrQueue.size() + queue.size();
     }
 
     VolcanoRuleMatch poll() {
       VolcanoRuleMatch match = preQueue.poll();
-      if (match == null) {
-        match = queue.poll();
+      if (match != null) {
+        return match;
       }
+      match = tvrQueue.poll();
+      if (match != null) {
+        return match;
+      }
+      match = queue.poll();
       return match;
     }
 
     void offer(VolcanoRuleMatch match) {
       if (match.getRule() instanceof SubstitutionRule) {
         preQueue.offer(match);
+      } else if (match.getRule() instanceof InterTvrRule) {
+        tvrQueue.offer(match);
       } else {
         queue.offer(match);
       }
@@ -356,6 +424,7 @@ class RuleQueue {
 
     void clear() {
       preQueue.clear();
+      tvrQueue.clear();
       queue.clear();
       names.clear();
       matchMap.clear();
