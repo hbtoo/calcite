@@ -25,6 +25,8 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.test.JdbcTest;
 import org.apache.calcite.util.Holder;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -56,19 +58,41 @@ public class TvrExecutionTest {
   //
   public static String instants = "28800000, 57600000";
 
+  public static String calciteEnableEnumerable = null;
+  public static Hook.Closeable closeable = null;
+
+  @BeforeAll public static void beforeAll() throws Exception {
+    closeable = Hook.PROGRAM.addThread(holder -> {
+      if (holder instanceof Holder) {
+        ((Holder) holder).set(
+            new Programs.TvrRuleSetProgram(
+                RuleSets.ofList(TvrRuleCollection.tvrStandardRuleSet())));
+      }
+    });
+
+    calciteEnableEnumerable = System.getProperties().getProperty("calcite.enable.enumerable");
+    System.getProperties().setProperty("calcite.enable.enumerable", "false");
+  }
+
+  @AfterAll public static void afterAll() throws Exception {
+    if (closeable != null) {
+      closeable.close();
+    }
+    if (calciteEnableEnumerable == null) {
+      System.getProperties().remove("calcite.enable.enumerable");
+    } else {
+      System.getProperties().setProperty("calcite.enable.enumerable", calciteEnableEnumerable);
+    }
+
+  }
+
+
   @Test public void testAvgAgg() throws Exception {
     String query = "select \"deptno\", avg(\"salary\") from \"hr\".\"emps\" group by \"deptno\"\n";
     run(query);
   }
 
   public void run(String query) throws ClassNotFoundException, SQLException {
-    Hook.PROGRAM.addThread(holder -> {
-      if (holder instanceof Holder) {
-        ((Holder) holder).set(
-            new Programs.TvrRuleSetProgram(
-            RuleSets.ofList(TvrRuleCollection.tvrStandardRuleSet())));
-      }
-    });
 
     // must set ENABLE_ENUMERABLE in CalcitePrepareImpl to false
     // to prevent directly generating EnumerableTableScan instead of LogicalTableScan
